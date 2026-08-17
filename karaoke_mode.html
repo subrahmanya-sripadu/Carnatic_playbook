@@ -1,0 +1,1466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Karaoke Mode</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+    <!-- Tone.js for High Quality Pitch Shifting & Offline Rendering -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <!-- Lame.js for pure MP3 Encoding -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lamejs/1.2.1/lame.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #0d0d12;
+            --panel-bg: rgba(255, 255, 255, 0.03);
+            --border-color: rgba(255, 255, 255, 0.08);
+            
+            /* Theme Variables */
+            --theme-primary: #00e5ff;
+            --theme-primary-rgb: 0, 229, 255;
+            --theme-secondary: #ff2a6d;
+            --image-hue-rotate: 0deg;
+
+            --text-main: #ffffff;
+            --text-muted: #8b8b99;
+            
+            /* Mic Button State Colors */
+            --mic-idle: #00e5ff;
+            --mic-recording: #ff0000;
+            --mic-paused: #ffff00;
+            
+            --current-mic-color: var(--mic-idle);
+        }
+
+        /* Alternate Themes */
+        body[data-theme="matrix"] {
+            --theme-primary: #00ff41;
+            --theme-primary-rgb: 0, 255, 65;
+            --theme-secondary: #008f11;
+            --image-hue-rotate: 90deg;
+        }
+        body[data-theme="sunset"] {
+            --theme-primary: #ff5e62;
+            --theme-primary-rgb: 255, 94, 98;
+            --theme-secondary: #ff9966;
+            --image-hue-rotate: 180deg;
+        }
+        body[data-theme="gold"] {
+            --theme-primary: #ffd700;
+            --theme-primary-rgb: 255, 215, 0;
+            --theme-secondary: #ff8c00;
+            --image-hue-rotate: -150deg;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+            font-family: 'Poppins', sans-serif;
+            touch-action: pan-y;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            overflow-x: hidden;
+            background: radial-gradient(circle at top, #1a1a2e 0%, #0d0d12 100%);
+            transition: all 0.5s ease;
+        }
+
+        /* Header */
+        .header {
+            width: 100%;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border-color);
+            background: rgba(0,0,0,0.4);
+            backdrop-filter: blur(10px);
+            z-index: 10;
+        }
+
+        .app-title {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.3rem;
+            color: var(--theme-primary);
+            text-shadow: 0 0 10px rgba(var(--theme-primary-rgb), 0.4);
+            letter-spacing: 1px;
+        }
+
+        .theme-selector { display: flex; gap: 8px; }
+        .theme-dot { width: 20px; height: 20px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; }
+        .theme-dot.active { border-color: white; }
+        .t-cyber { background: #00e5ff; }
+        .t-matrix { background: #00ff41; }
+        .t-sunset { background: #ff5e62; }
+        .t-gold { background: #ffd700; }
+
+        /* Central Interactive Area */
+        .interaction-area {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            padding: 60px 0 30px 0;
+            position: relative;
+            flex-grow: 1;
+        }
+
+        /* Dynamic Background Wave */
+        .dynamic-wave-bg {
+            position: absolute;
+            width: 340px;
+            height: 340px;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-image: url('image_052106.png');
+            background-size: cover;
+            background-position: center;
+            border-radius: 50%;
+            opacity: 0;
+            filter: hue-rotate(var(--image-hue-rotate)) blur(3px);
+            mix-blend-mode: screen;
+            pointer-events: none;
+            transition: opacity 0.2s, filter 0.5s;
+            z-index: 1;
+        }
+        
+        .wave-glow-ring {
+            position: absolute;
+            width: 220px;
+            height: 220px;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            border-radius: 50%;
+            box-shadow: 0 0 60px var(--current-mic-color);
+            opacity: 0;
+            pointer-events: none;
+            z-index: 1;
+            transition: box-shadow 0.3s ease;
+        }
+
+        /* Enormous Mic Button - Modern Black Design */
+        .mic-btn {
+            width: 220px;
+            height: 220px;
+            border-radius: 50%;
+            border: 2px solid rgba(255,255,255,0.05);
+            background: linear-gradient(145deg, #1f1f2e, #11111a);
+            box-shadow: 
+                20px 20px 40px #08080b, 
+                -20px -20px 40px #1c1c29,
+                inset 0 0 20px rgba(0,0,0,0.6);
+            cursor: pointer;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 5;
+            -webkit-tap-highlight-color: transparent;
+            overflow: hidden;
+        }
+
+        /* Mic Button States */
+        .mic-btn.state-idle {
+            --current-mic-color: var(--mic-idle);
+            box-shadow: 0 0 25px rgba(0, 229, 255, 0.4), inset 0 0 10px rgba(0,0,0,0.8);
+        }
+        
+        .mic-btn.state-recording {
+            --current-mic-color: var(--mic-recording);
+            box-shadow: 0 0 40px rgba(255, 0, 0, 0.8), inset 0 0 20px rgba(255, 0, 0, 0.4);
+            animation: pulse-red 1.5s infinite;
+            background: linear-gradient(145deg, #2a1515, #150a0a);
+        }
+        
+        .mic-btn.state-paused {
+            --current-mic-color: var(--mic-paused);
+            box-shadow: 0 0 40px rgba(255, 255, 0, 0.8), inset 0 0 20px rgba(255, 255, 0, 0.4);
+            animation: pulse-yellow 1.5s infinite;
+            background: linear-gradient(145deg, #2a2a15, #15150a);
+        }
+
+        @keyframes pulse-red {
+            0% { box-shadow: 0 0 20px rgba(255, 0, 0, 0.6); }
+            50% { box-shadow: 0 0 60px rgba(255, 0, 0, 1); }
+            100% { box-shadow: 0 0 20px rgba(255, 0, 0, 0.6); }
+        }
+        
+        @keyframes pulse-yellow {
+            0% { box-shadow: 0 0 20px rgba(255, 255, 0, 0.6); }
+            50% { box-shadow: 0 0 60px rgba(255, 255, 0, 1); }
+            100% { box-shadow: 0 0 20px rgba(255, 255, 0, 0.6); }
+        }
+
+        .mic-btn svg {
+            width: 70px;
+            height: 70px;
+            fill: #ffffff;
+            transition: all 0.3s ease;
+            filter: drop-shadow(0 0 5px rgba(0,0,0,0.8));
+            margin-bottom: 5px;
+            opacity: 0.9;
+            z-index: 2;
+        }
+
+        .mic-btn.state-idle svg#icon-play { display: none; }
+        .mic-btn.state-recording svg#icon-play { display: none; }
+        .mic-btn.state-paused svg#icon-play { display: block; fill: var(--mic-paused); filter: drop-shadow(0 0 10px var(--mic-paused)); }
+
+        .recording-text {
+            font-size: 0.9rem;
+            color: #ffffff;
+            font-weight: 700;
+            letter-spacing: 1px;
+            text-align: center;
+            line-height: 1.2;
+            text-shadow: 0 0 5px rgba(0,0,0,1);
+            transition: color 0.3s;
+            z-index: 2;
+            position: relative;
+        }
+        .recording-subtext {
+            font-size: 0.65rem;
+            color: rgba(255,255,255,0.9);
+            margin-top: 8px;
+            font-weight: 600;
+            text-align: center;
+            line-height: 1.4;
+            text-shadow: 0 0 5px rgba(0,0,0,1);
+            z-index: 2;
+            position: relative;
+        }
+        
+        /* Dashboard & Controls */
+        .dashboard {
+            width: 100%;
+            max-width: 500px;
+            padding: 0 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            margin-bottom: 30px;
+            z-index: 5;
+        }
+
+        .panel {
+            background: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 15px;
+            padding: 15px;
+            backdrop-filter: blur(10px);
+        }
+
+        .panel-title {
+            font-size: 0.85rem;
+            color: var(--theme-primary);
+            margin-bottom: 15px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-weight: 600;
+        }
+
+        /* Preset Row for Mic Types */
+        .preset-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .preset-btn {
+            flex: 1;
+            background: rgba(0,0,0,0.3);
+            border: 1px solid var(--border-color);
+            padding: 10px 5px;
+            border-radius: 10px;
+            color: var(--text-muted);
+            font-size: 0.7rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .preset-btn span.icon { font-size: 1.3rem; }
+        .preset-btn.active {
+            background: rgba(var(--theme-primary-rgb), 0.1);
+            border-color: var(--theme-primary);
+            color: var(--theme-primary);
+            box-shadow: 0 0 10px rgba(var(--theme-primary-rgb), 0.2);
+        }
+
+        .control-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 15px;
+        }
+        .control-row:last-child { margin-bottom: 0; }
+        
+        .control-row label {
+            font-size: 0.85rem;
+            width: 45%;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* Switch UI */
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 44px;
+            height: 22px;
+        }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: #333;
+            transition: .4s;
+            border-radius: 34px;
+            box-shadow: inset 0 0 5px rgba(0,0,0,0.5);
+        }
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 16px;
+            width: 16px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        input:checked + .slider { background-color: var(--theme-secondary); }
+        input:checked + .slider:before { transform: translateX(22px); }
+
+        /* Sliders */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 50%;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 6px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 3px;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 18px;
+            width: 18px;
+            border-radius: 50%;
+            background: var(--theme-primary);
+            margin-top: -6px;
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(var(--theme-primary-rgb), 0.5);
+            transition: background 0.3s;
+        }
+        #isolation-depth::-webkit-slider-thumb, #track-vol::-webkit-slider-thumb {
+            background: var(--theme-secondary);
+            box-shadow: 0 0 10px rgba(255, 42, 109, 0.5);
+        }
+
+        /* Pitch Stepper */
+        .pitch-stepper {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            width: 50%;
+            justify-content: flex-end;
+        }
+        .step-btn {
+            background: rgba(255, 42, 109, 0.15);
+            color: var(--theme-secondary);
+            border: 1px solid var(--theme-secondary);
+            border-radius: 8px;
+            width: 32px;
+            height: 32px;
+            font-size: 1.2rem;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+        .step-btn:active {
+            transform: scale(0.9);
+            background: rgba(255, 42, 109, 0.3);
+        }
+        .val-badge {
+            font-size: 1rem;
+            font-weight: 600;
+            background: transparent;
+            width: 30px;
+            text-align: center;
+            color: #fff;
+        }
+
+        /* Dynamic Action Row */
+        .action-row {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 10px;
+            align-items: stretch;
+            flex-wrap: nowrap;
+            width: 100%;
+            justify-content: space-between;
+        }
+
+        /* Progress Edge Styling */
+        .progress-box {
+            position: relative;
+            flex: 1;
+            display: flex;
+            border-radius: 10px;
+            padding: 2px; /* Leaves 2px space for the neon border */
+            background: transparent;
+            overflow: hidden;
+        }
+        .progress-box::before {
+            content: '';
+            position: absolute;
+            top: 50%; left: 50%;
+            width: 300%; height: 300%;
+            transform: translate(-50%, -50%);
+            background: conic-gradient(var(--theme-primary) var(--prog, 0%), transparent 0);
+            z-index: 0;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+        .progress-box.active {
+            background: rgba(255,255,255,0.05);
+        }
+        .progress-box.active::before {
+            opacity: 1;
+        }
+
+        .action-btn-group {
+            display: flex;
+            flex: 1;
+            gap: 4px;
+            align-items: stretch;
+            min-width: 0;
+        }
+
+        .action-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex: 1;
+            background: rgba(var(--theme-primary-rgb), 0.1);
+            color: var(--theme-primary);
+            border: 1px dashed var(--theme-primary);
+            padding: 8px 4px;
+            border-radius: 9px;
+            text-align: center;
+            cursor: pointer;
+            font-size: clamp(0.55rem, 2vw, 0.8rem);
+            transition: all 0.2s;
+            font-weight: 600;
+            margin: 0;
+            line-height: 1.1;
+            min-width: 0;
+            height: 100%;
+            z-index: 1; /* Stay above progress gradient */
+        }
+        
+        .progress-box.active .action-btn {
+            border-color: transparent;
+            background: var(--bg-color); /* Become solid when border is animated */
+        }
+
+        .action-btn:active { transform: scale(0.98); background: rgba(var(--theme-primary-rgb), 0.2); }
+        .action-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        
+        .action-btn.btn-sys {
+            color: #ff3333;
+            border-color: #ff3333;
+            background: rgba(255, 51, 51, 0.1);
+        }
+        .action-btn.btn-sys:active { background: rgba(255, 51, 51, 0.2); }
+
+        .progress-box.active .action-btn.btn-convert { border-color: transparent; background: var(--bg-color); }
+        .action-btn.btn-convert {
+            color: #00ffaa;
+            border-color: #00ffaa;
+            background: rgba(0, 255, 170, 0.1);
+        }
+        .action-btn.btn-convert:active { background: rgba(0, 255, 170, 0.2); }
+        
+        input[type="file"] { display: none; }
+
+        /* Circular Player Component */
+        .circular-player {
+            position: relative;
+            width: 32px;
+            height: 32px;
+            flex-shrink: 0;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255,255,255,0.05);
+            border-radius: 50%;
+            align-self: center;
+        }
+        .circular-player svg {
+            position: absolute;
+            top: 0; left: 0;
+            width: 32px; height: 32px;
+            transform: rotate(-90deg);
+        }
+        .circular-player circle {
+            fill: none;
+            stroke-width: 2.5;
+            cx: 16; cy: 16; r: 14;
+        }
+        .circular-player .bg { stroke: rgba(255,255,255,0.1); }
+        .circular-player .progress { 
+            stroke: var(--theme-primary); 
+            stroke-dasharray: 88; /* 2 * PI * 14 */
+            stroke-dashoffset: 88;
+            transition: stroke-dashoffset 0.1s linear;
+        }
+        .circular-player .icon {
+            font-size: 10px;
+            color: white;
+            z-index: 2;
+        }
+
+        /* Video Container for Captions Crop */
+        .video-wrapper {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 16/9;
+            border-radius: 8px;
+            overflow: hidden;
+            margin-bottom: 15px;
+            display: none;
+            background: #000;
+        }
+        .video-wrapper video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+            transition: all 0.3s ease;
+        }
+        /* Crop Video to show exactly the bottom 10% natively */
+        .video-wrapper.captions-mode {
+            aspect-ratio: 16/0.9; /* 10% of 16/9 height */
+        }
+        .video-wrapper.captions-mode video {
+            object-position: center bottom;
+        }
+        
+        .caption-toggle-btn {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            background: rgba(0,0,0,0.7);
+            color: var(--theme-primary);
+            border: 1px solid var(--theme-primary);
+            border-radius: 5px;
+            padding: 4px 8px;
+            font-size: 0.65rem;
+            cursor: pointer;
+            z-index: 10;
+        }
+
+        audio { display: none; }
+        
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <div class="header-top">
+            <div class="app-title">🎤 KARAOKE MODE</div>
+            <div class="theme-selector">
+                <div class="theme-dot t-cyber active" data-theme="cyber"></div>
+                <div class="theme-dot t-matrix" data-theme="matrix"></div>
+                <div class="theme-dot t-sunset" data-theme="sunset"></div>
+                <div class="theme-dot t-gold" data-theme="gold"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="interaction-area">
+        <!-- Siri Style Dynamic Wave Elements -->
+        <div class="wave-glow-ring" id="wave-glow"></div>
+        <div class="dynamic-wave-bg" id="wave-bg"></div>
+
+        <!-- Master Mic Button (Tap to Record, Hold to Pause) -->
+        <button class="mic-btn state-idle" id="mic-btn">
+            <!-- Modern Black Background replaced image texture -->
+            <svg id="icon-mic" viewBox="0 0 24 24">
+                <path d="M12,2A3,3 0 0,1 15,5V11A3,3 0 0,1 12,14A3,3 0 0,1 9,11V5A3,3 0 0,1 12,2M19,11C19,14.53 16.39,17.44 13,17.93V21H11V17.93C7.61,17.44 5,14.53 5,11H7A5,5 0 0,0 12,16A5,5 0 0,0 17,11H19Z"/>
+            </svg>
+            <svg id="icon-play" viewBox="0 0 24 24">
+                <path d="M8,5.14V19.14L19,12.14L8,5.14Z" />
+            </svg>
+            <div class="recording-text" id="mic-text">TAP TO RECORD</div>
+            <div class="recording-subtext" id="mic-subtext"></div>
+        </button>
+    </div>
+
+    <div class="dashboard">
+        
+        <!-- Main Mic Controls -->
+        <div class="panel">
+            <div class="panel-title">Voice Studio & FX</div>
+            
+            <div class="preset-row" id="preset-container">
+                <div class="preset-btn active" data-preset="flat">
+                    <span class="icon">🎙️</span>
+                    Studio Flat
+                </div>
+                <div class="preset-btn" data-preset="warm">
+                    <span class="icon">📻</span>
+                    Radio
+                </div>
+                <div class="preset-btn" data-preset="stage">
+                    <span class="icon">🎭</span>
+                    Live Stage
+                </div>
+                <div class="preset-btn" data-preset="vintage">
+                    <span class="icon">☎️</span>
+                    Vintage
+                </div>
+            </div>
+            
+            <div class="control-row">
+                <label>Mic Gain (Volume)</label>
+                <input type="range" id="mic-vol" min="0" max="10" step="0.1" value="2">
+            </div>
+
+            <div class="control-row">
+                <label>
+                    <label class="switch" style="transform: scale(0.7); margin-right: 5px;">
+                        <input type="checkbox" id="reverb-toggle" checked>
+                        <span class="slider"></span>
+                    </label>
+                    Wide Reverb Hall
+                </label>
+                <input type="range" id="reverb-level" min="0" max="1" step="0.05" value="0.5">
+            </div>
+
+            <div class="control-row">
+                <label>
+                    <label class="switch" style="transform: scale(0.7); margin-right: 5px;">
+                        <input type="checkbox" id="echo-toggle">
+                        <span class="slider"></span>
+                    </label>
+                    Deep Delay Echo
+                </label>
+                <input type="range" id="echo-level" min="0" max="1" step="0.05" value="0.3">
+            </div>
+        </div>
+
+        <!-- Karaoke / System Audio Controls -->
+        <div class="panel" id="karaoke-panel">
+            <div class="panel-title">Karaoke Center</div>
+            
+            <!-- Ordered Action Row -->
+            <div class="action-row">
+                <button class="action-btn btn-sys" id="btn-start-sys">🔗 Youtube Cast</button>
+                
+                <div class="action-btn-group">
+                    <div class="progress-box" id="upload-progress">
+                        <label for="audio-upload" class="action-btn" id="upload-label">🎵 Track Upload</label>
+                        <input type="file" id="audio-upload" accept="audio/*">
+                    </div>
+                    <div class="circular-player" id="player-track" style="display: none;">
+                        <svg viewBox="0 0 32 32">
+                            <circle class="bg"></circle>
+                            <circle class="progress"></circle>
+                        </svg>
+                        <div class="icon" id="icon-track">▶</div>
+                    </div>
+                </div>
+
+                <div class="action-btn-group">
+                    <div class="progress-box" id="convert-progress" style="--theme-primary: #00ffaa; --theme-primary-rgb: 0,255,170;">
+                        <button class="action-btn btn-convert" id="btn-convert">✨ Convert Edits</button>
+                    </div>
+                    <div class="circular-player" id="player-converted" style="display: none;">
+                        <svg viewBox="0 0 32 32">
+                            <circle class="bg"></circle>
+                            <circle class="progress" style="stroke: #00ffaa;"></circle>
+                        </svg>
+                        <div class="icon" id="icon-converted">▶</div>
+                    </div>
+                </div>
+            </div>
+
+            <p style="font-size: 0.65rem; color: #aaa; margin-bottom: 15px; text-align: center; font-style: italic;">
+                *For YouTube: Select a "Chrome Tab" and check "Share Tab Audio".*
+            </p>
+            
+            <!-- Hidden Audios for tracking logic -->
+            <audio id="audio-player" crossorigin="anonymous"></audio>
+            <audio id="audio-converted"></audio>
+            
+            <!-- Live Lyrics Casting Screen -->
+            <div class="video-wrapper" id="video-container">
+                <button class="caption-toggle-btn" id="caption-toggle">Live Captions Only</button>
+                <video id="lyrics-video" autoplay playsinline muted></video>
+            </div>
+
+            <div class="control-row" style="margin-top: 15px;">
+                <label>Master Track Gain</label>
+                <input type="range" id="track-vol" min="0" max="5" step="0.1" value="1.0">
+            </div>
+            <div class="control-row">
+                <label>Voice Isolator</label>
+                <input type="range" id="isolation-depth" min="0" max="1" step="0.05" value="0">
+            </div>
+            <div class="control-row">
+                <label>Key Shift</label>
+                <div class="pitch-stepper">
+                    <button class="step-btn" id="btn-pitch-down">-</button>
+                    <span id="pitch-val" class="val-badge">0</span>
+                    <button class="step-btn" id="btn-pitch-up">+</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Audio Environment
+        let ctx;
+        let micStream, micSource, micGain, filterNode;
+        let sysStream, sysSource;
+        let reverbNode, reverbGain, delayNode, feedbackNode, echoGain;
+        let analyser;
+        
+        let trackSource;
+        let karaokeInputNode, trackGain, dryTrackGain, wetCancelGain, isolationMerger, tonePitchShifter;
+        let masterCompressor, mediaStreamDest;
+        
+        let recorder;
+        let recordedChunks = [];
+        
+        // State management
+        let currentState = 'IDLE'; // IDLE, RECORDING, PAUSED
+        let currentPitchShift = 0;
+        let uploadedAudioBuffer = null; 
+        
+        // Timer for Long Press
+        let pressTimer;
+        let isLongPress = false;
+
+        // UI Elements
+        const micBtn = document.getElementById('mic-btn');
+        const waveBg = document.getElementById('wave-bg');
+        const waveGlow = document.getElementById('wave-glow');
+        const micText = document.getElementById('mic-text');
+        const micSubtext = document.getElementById('mic-subtext');
+        
+        const presetBtns = document.querySelectorAll('.preset-btn');
+        const themeDots = document.querySelectorAll('.theme-dot');
+        
+        const micVol = document.getElementById('mic-vol');
+        const reverbToggle = document.getElementById('reverb-toggle');
+        const reverbLevel = document.getElementById('reverb-level');
+        const echoToggle = document.getElementById('echo-toggle');
+        const echoLevel = document.getElementById('echo-level');
+
+        const audioUpload = document.getElementById('audio-upload');
+        const audioPlayer = document.getElementById('audio-player');
+        const audioConverted = document.getElementById('audio-converted');
+        
+        const videoContainer = document.getElementById('video-container');
+        const lyricsVideo = document.getElementById('lyrics-video');
+        const captionToggleBtn = document.getElementById('caption-toggle');
+        
+        const uploadLabel = document.getElementById('upload-label');
+        const btnConvert = document.getElementById('btn-convert');
+        
+        const trackVol = document.getElementById('track-vol');
+        const isolationDepth = document.getElementById('isolation-depth');
+        const btnPitchDown = document.getElementById('btn-pitch-down');
+        const btnPitchUp = document.getElementById('btn-pitch-up');
+        const pitchVal = document.getElementById('pitch-val');
+
+        const btnStartSys = document.getElementById('btn-start-sys');
+
+        // Circular Players Setup
+        function setupCircularPlayer(containerId, audioObj, iconId) {
+            const container = document.getElementById(containerId);
+            const progressCircle = container.querySelector('.progress');
+            const icon = document.getElementById(iconId);
+            const circumference = 2 * Math.PI * 14; 
+            
+            progressCircle.style.strokeDasharray = circumference;
+            progressCircle.style.strokeDashoffset = circumference;
+
+            icon.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                // Ensure Context is actively running before playing audio!
+                if (ctx && ctx.state !== 'running') await ctx.resume();
+                
+                if (audioObj.paused) {
+                    audioObj.play();
+                    icon.innerHTML = '⏸';
+                } else {
+                    audioObj.pause();
+                    icon.innerHTML = '▶';
+                }
+            });
+
+            container.addEventListener('click', async (e) => {
+                if(!audioObj.duration) return;
+                const rect = container.getBoundingClientRect();
+                const x = e.clientX - rect.left - rect.width / 2;
+                const y = e.clientY - rect.top - rect.height / 2;
+                let angle = Math.atan2(y, x) + Math.PI / 2; 
+                if (angle < 0) angle += 2 * Math.PI;
+                const percent = angle / (2 * Math.PI);
+                audioObj.currentTime = percent * audioObj.duration;
+                
+                if (audioObj.paused) {
+                    if (ctx && ctx.state !== 'running') await ctx.resume();
+                    audioObj.play();
+                    icon.innerHTML = '⏸';
+                }
+            });
+
+            audioObj.addEventListener('timeupdate', () => {
+                if(audioObj.duration) {
+                    const percent = audioObj.currentTime / audioObj.duration;
+                    progressCircle.style.strokeDashoffset = circumference - (percent * circumference);
+                }
+            });
+            audioObj.addEventListener('ended', () => {
+                icon.innerHTML = '▶';
+                progressCircle.style.strokeDashoffset = circumference;
+            });
+        }
+        
+        setupCircularPlayer('player-track', audioPlayer, 'icon-track');
+        setupCircularPlayer('player-converted', audioConverted, 'icon-converted');
+
+        // Theme Handling
+        themeDots.forEach(dot => {
+            dot.addEventListener('click', (e) => {
+                themeDots.forEach(d => d.classList.remove('active'));
+                e.target.classList.add('active');
+                document.body.setAttribute('data-theme', e.target.dataset.theme);
+            });
+        });
+
+        presetBtns.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                presetBtns.forEach(b => b.classList.remove('active'));
+                const target = e.currentTarget;
+                target.classList.add('active');
+                applyMicPreset(target.dataset.preset);
+            });
+        });
+
+        // Initialize Audio Environment
+        async function initAudio() {
+            if (ctx) return;
+            
+            await Tone.start(); // strictly start Tone & AudioContext
+            ctx = Tone.getContext().rawContext;
+            
+            masterCompressor = ctx.createDynamicsCompressor();
+            masterCompressor.threshold.value = -10;
+            masterCompressor.knee.value = 10;
+            masterCompressor.ratio.value = 12;
+            masterCompressor.attack.value = 0.003;
+            masterCompressor.release.value = 0.25;
+            
+            masterCompressor.connect(ctx.destination); // Speakers output
+            
+            mediaStreamDest = ctx.createMediaStreamDestination();
+            masterCompressor.connect(mediaStreamDest); // Recorder Loopback
+
+            setupEffects();
+            setupKaraokeRouting();
+        }
+
+        function createReverbImpulse(duration, decay) {
+            const length = ctx.sampleRate * duration;
+            const impulse = ctx.createBuffer(2, length, ctx.sampleRate);
+            for (let i = 0; i < 2; i++) {
+                const channel = impulse.getChannelData(i);
+                for (let j = 0; j < length; j++) {
+                    channel[j] = (Math.random() * 2 - 1) * Math.pow(1 - j / length, decay);
+                }
+            }
+            return impulse;
+        }
+
+        function setupEffects() {
+            reverbNode = ctx.createConvolver();
+            reverbNode.buffer = createReverbImpulse(3.5, 2.5); 
+            reverbGain = ctx.createGain();
+            reverbGain.gain.value = reverbToggle.checked ? reverbLevel.value : 0;
+            reverbNode.connect(reverbGain);
+            reverbGain.connect(masterCompressor);
+
+            delayNode = ctx.createDelay();
+            delayNode.delayTime.value = 0.4;
+            feedbackNode = ctx.createGain();
+            feedbackNode.gain.value = 0.5;
+            echoGain = ctx.createGain();
+            echoGain.gain.value = echoToggle.checked ? echoLevel.value : 0;
+            
+            delayNode.connect(feedbackNode);
+            feedbackNode.connect(delayNode);
+            delayNode.connect(echoGain);
+            echoGain.connect(masterCompressor);
+        }
+
+        function setupKaraokeRouting() {
+            karaokeInputNode = ctx.createGain(); 
+            
+            const splitter = ctx.createChannelSplitter(2);
+            const invertRight = ctx.createGain();
+            invertRight.gain.value = -1;
+            const cancelMixer = ctx.createGain();
+            
+            karaokeInputNode.connect(splitter);
+            splitter.connect(cancelMixer, 0); 
+            splitter.connect(invertRight, 1); 
+            invertRight.connect(cancelMixer); 
+            
+            dryTrackGain = ctx.createGain(); 
+            wetCancelGain = ctx.createGain(); 
+            wetCancelGain.gain.value = 0;
+            dryTrackGain.gain.value = 1;
+
+            karaokeInputNode.connect(dryTrackGain);
+            cancelMixer.connect(wetCancelGain);
+
+            isolationMerger = ctx.createGain();
+            dryTrackGain.connect(isolationMerger);
+            wetCancelGain.connect(isolationMerger);
+            
+            tonePitchShifter = new Tone.PitchShift({ pitch: 0 });
+            
+            // Connect WebAudio -> Tone -> WebAudio cleanly
+            Tone.connect(isolationMerger, tonePitchShifter);
+
+            trackGain = ctx.createGain();
+            trackGain.gain.value = trackVol.value; 
+            
+            Tone.connect(tonePitchShifter, trackGain);
+            trackGain.connect(masterCompressor);
+        }
+
+        // --- Core Mic & Recording Logic ---
+        async function startMicrophone() {
+            try {
+                micStream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, latency: 0 } 
+                });
+
+                micSource = ctx.createMediaStreamSource(micStream);
+                
+                micGain = ctx.createGain();
+                micGain.gain.value = micVol.value;
+                
+                filterNode = ctx.createBiquadFilter();
+                const activePreset = document.querySelector('.preset-btn.active').dataset.preset;
+                applyMicPreset(activePreset);
+                
+                analyser = ctx.createAnalyser();
+                analyser.fftSize = 512;
+                analyser.smoothingTimeConstant = 0.7;
+
+                micSource.connect(filterNode);
+                filterNode.connect(micGain);
+                
+                micGain.connect(analyser); 
+                micGain.connect(masterCompressor); 
+                micGain.connect(reverbNode); 
+                micGain.connect(delayNode); 
+
+                if (ctx.state === 'suspended') await ctx.resume();
+                requestAnimationFrame(animateWave);
+                return true;
+            } catch (err) {
+                alert("Microphone access denied. Please allow mic access.");
+                return false;
+            }
+        }
+        
+        function applyMicPreset(preset) {
+            if (!filterNode) return;
+            filterNode.type = 'peaking';
+            filterNode.frequency.value = 1000;
+            filterNode.Q.value = 1;
+            filterNode.gain.value = 0;
+
+            switch(preset) {
+                case 'warm': 
+                    filterNode.type = 'lowshelf';
+                    filterNode.frequency.value = 250;
+                    filterNode.gain.value = 6;
+                    break;
+                case 'stage': 
+                    filterNode.type = 'highshelf';
+                    filterNode.frequency.value = 3500;
+                    filterNode.gain.value = 5;
+                    break;
+                case 'vintage': 
+                    filterNode.type = 'bandpass';
+                    filterNode.frequency.value = 1500;
+                    filterNode.Q.value = 1.5;
+                    break;
+                case 'flat':
+                default:
+                    filterNode.type = 'allpass';
+                    break;
+            }
+        }
+
+        function stopMicrophone() {
+            if (micStream) micStream.getTracks().forEach(t => t.stop());
+            if (micSource) micSource.disconnect();
+            micStream = null;
+        }
+
+        function startRecording() {
+            if (!mediaStreamDest) return;
+            const options = { mimeType: 'audio/webm' };
+            try {
+                recorder = new MediaRecorder(mediaStreamDest.stream, options);
+            } catch(e) {
+                recorder = new MediaRecorder(mediaStreamDest.stream);
+            }
+
+            recordedChunks = [];
+            recorder.ondataavailable = e => {
+                if (e.data.size > 0) recordedChunks.push(e.data);
+            };
+            
+            recorder.onstop = () => {
+                const blob = new Blob(recordedChunks, { type: 'audio/webm' });
+                const url = URL.createObjectURL(blob);
+                
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = url;
+                a.download = `Instant_Singing_Record_${Date.now()}.mp3`; 
+                document.body.appendChild(a);
+                a.click();
+                setTimeout(() => {
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                }, 100);
+            };
+
+            recorder.start();
+        }
+
+        // --- UI State Updates ---
+        function updateMicUI() {
+            micBtn.className = `mic-btn state-${currentState.toLowerCase()}`;
+            if (currentState === 'IDLE') {
+                micText.innerText = "TAP TO RECORD";
+                micSubtext.innerHTML = "";
+            } else if (currentState === 'RECORDING') {
+                micText.innerText = "RECORDING";
+                micSubtext.innerHTML = "TAP TO STOP & SAVE<br>HOLD TO PAUSE";
+                micText.style.color = '#ff3333';
+            } else if (currentState === 'PAUSED') {
+                micText.innerText = "PAUSED";
+                micSubtext.innerHTML = "TAP TO RESUME<br>HOLD TO STOP & SAVE"; 
+                micText.style.color = '#ffff00';
+            }
+        }
+
+        // --- Interaction Handlers (Click & Long Press) ---
+        micBtn.addEventListener('pointerdown', (e) => {
+            isLongPress = false;
+            pressTimer = setTimeout(() => {
+                isLongPress = true;
+                handleLongPress();
+            }, 600); // 600ms hold triggers alternative action
+        });
+
+        micBtn.addEventListener('pointerup', (e) => {
+            clearTimeout(pressTimer);
+            if (!isLongPress) {
+                handleTap();
+            }
+        });
+
+        micBtn.addEventListener('pointerleave', (e) => {
+            clearTimeout(pressTimer);
+        });
+
+        async function handleTap() {
+            if (currentState === 'IDLE') {
+                // START RECORDING
+                await initAudio();
+                const success = await startMicrophone();
+                if (success) {
+                    startRecording();
+                    currentState = 'RECORDING';
+                    updateMicUI();
+                }
+            } else if (currentState === 'RECORDING') {
+                // STOP & SAVE
+                stopSession();
+            } else if (currentState === 'PAUSED') {
+                // RESUME RECORDING
+                if (recorder && recorder.state === 'paused') recorder.resume();
+                
+                currentState = 'RECORDING';
+                updateMicUI();
+            }
+        }
+
+        function handleLongPress() {
+            if (currentState === 'RECORDING') {
+                // PAUSE RECORDING
+                if (recorder && recorder.state === 'recording') recorder.pause();
+                
+                currentState = 'PAUSED';
+                updateMicUI();
+            } else if (currentState === 'PAUSED') {
+                // STOP & SAVE FROM PAUSE
+                stopSession();
+            }
+        }
+
+        function stopSession() {
+            stopMicrophone();
+            if (recorder && recorder.state !== 'inactive') recorder.stop(); // triggers the save
+            currentState = 'IDLE';
+            updateMicUI();
+        }
+
+        // Dynamic Wave Animation
+        let rotation = 0;
+        function animateWave() {
+            if (!analyser || ((currentState !== 'RECORDING') && waveBg.style.opacity == 0)) {
+                requestAnimationFrame(animateWave);
+                return;
+            }
+            
+            const bufferLength = analyser.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLength);
+            analyser.getByteTimeDomainData(dataArray);
+            
+            let rms = 0;
+            for(let i = 0; i < bufferLength; i++) {
+                let val = (dataArray[i] - 128) / 128.0;
+                rms += val * val;
+            }
+            rms = Math.sqrt(rms / bufferLength);
+            
+            const scale = 1.0 + (rms * 4.0); 
+            const opacity = (currentState === 'RECORDING') ? Math.min(0.3 + (rms * 3), 0.9) : 0;
+            
+            rotation += 0.2; 
+            waveBg.style.transform = `translate(-50%, -50%) scale(${scale}) rotate(${rotation}deg)`;
+            waveBg.style.opacity = opacity;
+            
+            waveGlow.style.transform = `translate(-50%, -50%) scale(${scale * 0.9})`;
+            waveGlow.style.opacity = opacity * 0.5;
+            
+            requestAnimationFrame(animateWave);
+        }
+
+        // --- Controls Event Listeners ---
+        micVol.addEventListener('input', (e) => {
+            if (micGain) micGain.gain.value = e.target.value;
+        });
+
+        reverbToggle.addEventListener('change', (e) => {
+            if (reverbGain) reverbGain.gain.value = e.target.checked ? reverbLevel.value : 0;
+        });
+        reverbLevel.addEventListener('input', (e) => {
+            if (reverbToggle.checked && reverbGain) reverbGain.gain.value = e.target.value;
+        });
+
+        echoToggle.addEventListener('change', (e) => {
+            if (echoGain) echoGain.gain.value = e.target.checked ? echoLevel.value : 0;
+        });
+        echoLevel.addEventListener('input', (e) => {
+            if (echoToggle.checked && echoGain) echoGain.gain.value = e.target.value;
+        });
+
+        // --- Karaoke Upload & MP3 Offline Render Setup ---
+        audioUpload.addEventListener('change', async function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                await initAudio();
+                
+                // Visual Loading State via Neon Border
+                const pBox = document.getElementById('upload-progress');
+                const uploadLabel = document.getElementById('upload-label');
+                
+                pBox.classList.add('active');
+                uploadLabel.innerText = "⏳ Uploading...";
+                
+                let p = 0;
+                const ival = setInterval(() => {
+                    p += 10;
+                    pBox.style.setProperty('--prog', p + '%');
+                    
+                    if (p >= 100) {
+                        clearInterval(ival);
+                        setTimeout(async () => {
+                            // Finish Animation
+                            pBox.classList.remove('active');
+                            pBox.style.setProperty('--prog', '0%');
+                            uploadLabel.innerText = "🎵 " + file.name.substring(0, 10) + "...";
+                            
+                            // Process file memory
+                            const arrayBuffer = await file.arrayBuffer();
+                            uploadedAudioBuffer = await ctx.decodeAudioData(arrayBuffer);
+
+                            const url = URL.createObjectURL(file);
+                            audioPlayer.src = url;
+                            document.getElementById('player-track').style.display = 'flex'; // show play btn
+                            videoContainer.style.display = 'none'; // hide live casting screen
+                            
+                            // Critically connect once
+                            if (!trackSource) {
+                                trackSource = ctx.createMediaElementSource(audioPlayer);
+                                Tone.connect(trackSource, karaokeInputNode); 
+                            }
+                            
+                            // Ensure context stays active for scrubbing and playing!
+                            if(ctx.state !== 'running') await ctx.resume();
+                            
+                        }, 200);
+                    }
+                }, 40); // Fast but visibly pleasing spin
+            }
+        });
+
+        trackVol.addEventListener('input', (e) => {
+            if (trackGain) trackGain.gain.value = e.target.value;
+        });
+
+        isolationDepth.addEventListener('input', (e) => {
+            const val = parseFloat(e.target.value); 
+            if(dryTrackGain && wetCancelGain) {
+                dryTrackGain.gain.value = 1 - val;
+                wetCancelGain.gain.value = val * 1.5; 
+            }
+        });
+
+        function updatePitchUI() {
+            pitchVal.innerText = (currentPitchShift > 0 ? "+" : "") + currentPitchShift;
+            if (tonePitchShifter) tonePitchShifter.pitch = currentPitchShift;
+        }
+
+        btnPitchUp.addEventListener('click', () => {
+            if (currentPitchShift < 12) {
+                currentPitchShift++;
+                updatePitchUI();
+            }
+        });
+
+        btnPitchDown.addEventListener('click', () => {
+            if (currentPitchShift > -12) {
+                currentPitchShift--;
+                updatePitchUI();
+            }
+        });
+
+        // MP3 Encoder Logic leveraging Lamejs
+        function audioBufferToMp3(buffer) {
+            const channels = buffer.numberOfChannels;
+            const sampleRate = buffer.sampleRate;
+            const mp3encoder = new lamejs.Mp3Encoder(channels, sampleRate, 128);
+            const mp3Data = [];
+            
+            function convertBuffer(array) {
+                const res = new Int16Array(array.length);
+                for (let i = 0; i < array.length; i++) {
+                    let s = Math.max(-1, Math.min(1, array[i]));
+                    res[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+                }
+                return res;
+            }
+
+            const left = convertBuffer(buffer.getChannelData(0));
+            const right = channels > 1 ? convertBuffer(buffer.getChannelData(1)) : left;
+
+            const sampleBlockSize = 1152;
+            for (let i = 0; i < left.length; i += sampleBlockSize) {
+                const leftChunk = left.subarray(i, i + sampleBlockSize);
+                const rightChunk = right.subarray(i, i + sampleBlockSize);
+                const mp3buf = channels === 2 ? mp3encoder.encodeBuffer(leftChunk, rightChunk) : mp3encoder.encodeBuffer(leftChunk);
+                if (mp3buf.length > 0) mp3Data.push(mp3buf);
+            }
+            const mp3buf = mp3encoder.flush();
+            if (mp3buf.length > 0) mp3Data.push(mp3buf);
+            
+            return new Blob(mp3Data, { type: 'audio/mp3' });
+        }
+
+        btnConvert.addEventListener('click', async () => {
+            if (!uploadedAudioBuffer) {
+                alert("Please upload a track first to convert edits.");
+                return;
+            }
+            
+            btnConvert.disabled = true;
+            
+            // Visual Processing Border via Neon Edge
+            const pBox = document.getElementById('convert-progress');
+            pBox.classList.add('active');
+            btnConvert.innerText = "⏳ Converting...";
+            
+            let p = 0;
+            const ival = setInterval(() => {
+                if(p < 90) p += 5; // Fill up to 90% while waiting
+                pBox.style.setProperty('--prog', p + '%');
+            }, 100);
+
+            try {
+                // Release UI thread
+                await new Promise(r => setTimeout(r, 100));
+
+                const duration = uploadedAudioBuffer.duration;
+                const renderedBuffer = await Tone.Offline(async ({ context }) => {
+                    const source = new Tone.BufferSource(uploadedAudioBuffer).start(0);
+                    
+                    const offlineTrackGain = new Tone.Gain(parseFloat(trackVol.value));
+                    const offlinePitchShifter = new Tone.PitchShift({ pitch: currentPitchShift });
+                    
+                    // Pure Tone.js routing for safe offline execution
+                    const splitter = new Tone.Split(2);
+                    const invert = new Tone.Gain(-1);
+                    const cancelMixer = new Tone.Gain();
+                    
+                    Tone.connect(source, splitter);
+                    Tone.connect(splitter, cancelMixer, 0, 0); // L
+                    Tone.connect(splitter, invert, 1, 0);      // R
+                    Tone.connect(invert, cancelMixer);         // -R + L
+                    
+                    const depth = parseFloat(isolationDepth.value);
+                    const dryGain = new Tone.Gain(1 - depth);
+                    const wetGain = new Tone.Gain(depth * 1.5);
+                    
+                    Tone.connect(source, dryGain);
+                    Tone.connect(cancelMixer, wetGain);
+                    
+                    const merger = new Tone.Gain();
+                    Tone.connect(dryGain, merger);
+                    Tone.connect(wetGain, merger);
+                    
+                    Tone.connect(merger, offlinePitchShifter);
+                    Tone.connect(offlinePitchShifter, offlineTrackGain);
+                    offlineTrackGain.toDestination();
+                }, duration);
+
+                const mp3Blob = audioBufferToMp3(renderedBuffer.get());
+                const url = URL.createObjectURL(mp3Blob);
+                
+                audioConverted.src = url;
+                document.getElementById('player-converted').style.display = 'flex';
+                
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = "Converted_Karaoke_Track.mp3";
+                a.click();
+                
+                p = 100;
+                pBox.style.setProperty('--prog', '100%');
+                
+            } catch (err) {
+                console.error(err);
+                alert("An error occurred during conversion.");
+            } finally {
+                clearInterval(ival);
+                setTimeout(() => {
+                    pBox.classList.remove('active');
+                    pBox.style.setProperty('--prog', '0%');
+                    btnConvert.innerHTML = "✨ Convert Edits";
+                    btnConvert.disabled = false;
+                }, 400);
+            }
+        });
+
+        // --- YouTube / System Audio Capture ---
+        btnStartSys.addEventListener('click', async () => {
+            await initAudio();
+            try {
+                sysStream = await navigator.mediaDevices.getDisplayMedia({ 
+                    video: true, 
+                    audio: { 
+                        suppressLocalAudioPlayback: true,
+                        echoCancellation: false, 
+                        noiseSuppression: false, 
+                        autoGainControl: false 
+                    } 
+                });
+                
+                if (sysStream.getAudioTracks().length === 0) {
+                    alert("No audio track detected! Make sure you check 'Share Tab Audio' in the Chrome prompt.");
+                    sysStream.getTracks().forEach(t => t.stop());
+                    return;
+                }
+                
+                lyricsVideo.srcObject = sysStream;
+                videoContainer.style.display = 'block';
+                
+                sysSource = ctx.createMediaStreamSource(sysStream);
+                Tone.connect(sysSource, karaokeInputNode); 
+                
+                // Play logic sync fix
+                if (ctx.state !== 'running') await ctx.resume();
+                
+                btnStartSys.innerText = "✅ Live Cast Connected";
+                btnStartSys.style.borderColor = "#00ff00";
+                btnStartSys.style.color = "#00ff00";
+                
+                sysStream.getVideoTracks()[0].onended = () => {
+                    sysSource.disconnect();
+                    videoContainer.style.display = 'none';
+                    lyricsVideo.srcObject = null;
+                    btnStartSys.innerText = "🔗 Youtube Cast";
+                    btnStartSys.style.borderColor = "#ff3333";
+                    btnStartSys.style.color = "#ff3333";
+                };
+
+            } catch (err) {
+                console.error(err);
+                alert("Live casting canceled or not supported.");
+            }
+        });
+        
+        // --- Live Captions Crop Toggle ---
+        captionToggleBtn.addEventListener('click', () => {
+            videoContainer.classList.toggle('captions-mode');
+            if(videoContainer.classList.contains('captions-mode')) {
+                captionToggleBtn.innerText = 'Full Video';
+            } else {
+                captionToggleBtn.innerText = 'Live Captions Only';
+            }
+        });
+
+    </script>
+</body>
+</html>
