@@ -400,7 +400,7 @@
   <div id="appViewer">
     <div class="viewer-header">
       <button class="back-btn" onclick="closeViewer()" title="Home">🏠</button>
-      <div class="viewer-title" id="viewerTitle">Carnatic Shruthi Box</div>
+      <div class="viewer-title" id="viewerTitle">Karaoke Mode</div>
       <div id="tpBgBadge" style="display:none;align-items:center;font-size:0.62rem;color:#ffd700;background:rgba(196,154,56,0.15);border:1px solid rgba(196,154,56,0.4);border-radius:10px;padding:3px 8px;white-space:nowrap;margin-left:4px;flex-shrink:0;">🎵 Shruthi is playing</div>
     </div>
     <!-- Persistent frames: stay loaded so audio never stops -->
@@ -415,19 +415,12 @@
     <button class="lang-toggle" id="btnLang" onclick="toggleLang()">ಕನ್ನಡ</button>
 
     <div class="header">
-      <div class="title" id="tTitle">Carnatic Shruthi Box</div>
-      <div class="subtitle" id="tSub">Music Studio for Classical Musicians</div>
+      <div class="title" id="tTitle">Karaoke PRO</div>
+      <div class="subtitle" id="tSub">Keep singing</div>
     </div>
 
     <div class="grid-container">
-      <a class="card tanpura" data-url="tanpura.html" data-title="Digital Tanpura" onclick="openViewer(this)">
-        <div class="card-content">
-          <div class="card-icon">🪕</div>
-          <div class="card-title" id="tTanpura">Digital Tanpura</div>
-          <div class="card-desc" id="dTanpura">High-fidelity Shruti Box with polyphonic strings and pitch-perfect drone.</div>
-        </div>
-        <div class="pro-ribbon">👑</div>
-      </a>
+
 	  
 	   <a class="card raga" data-url="karaoke_mode.html" data-title="Instant Singing" onclick="openViewer(this)">
         <div class="card-content">
@@ -438,32 +431,8 @@
         <div class="pro-max-ribbon">👑</div>
       </a>
 
-      <a class="card tala" data-url="tala.html" data-title="Tala Engine" onclick="openViewer(this)">
-        <div class="card-content">
-          <div class="card-icon">🪘</div>
-          <div class="card-title" id="tTala">Tala Engine</div>
-          <div class="card-desc" id="dTala">Advanced Carnatic rhythm generator with authentic Mridangam beats.</div>
-        </div>
-        <div class="pro-ribbon">👑</div>
-      </a>
 
-      <a class="card aro" data-url="aro.html" data-title="Raga Engine" onclick="openViewer(this)">
-        <div class="card-content">
-          <div class="card-icon">🎹</div>
-          <div class="card-title" id="tAro">Raga Engine</div>
-          <div class="card-desc" id="dAro">Interactive Arohana & Avarohana playback with 72 Melakarta integration.</div>
-        </div>
-        <div class="pro-max-ribbon">👑</div>
-      </a>
 
-      <a class="card raga" data-url="raga.html" data-title="Pitch Finder & Raga AI" onclick="openViewer(this)">
-        <div class="card-content">
-          <div class="card-icon">🎙️</div>
-          <div class="card-title" id="tRaga">Pitch & Raga Finder</div>
-          <div class="card-desc" id="dRaga">Real-time vocal pitch tracking, Gamaka filtering, Raga & Krithi recognition.</div>
-        </div>
-        <div class="pro-max-ribbon">👑</div>
-      </a> 
     </div>
 
     <div class="watermark" id="tWater">Designed & Developed by Subrahmanya Sripadu</div>
